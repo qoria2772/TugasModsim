@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory System - Fixed Status</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f5f6fa; }
+        .card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .queue-canvas { background-color: #eef5ff; height: 150px; position: relative; overflow: hidden; border-radius: 8px; }
+        .person { position: absolute; font-size: 30px; transition: left 0.5s ease-in-out; bottom: 10px; }
+        .status-reorder { color: #e74c3c; font-weight: bold; }
+        .status-aman { color: #27ae60; font-weight: bold; }
+        .formula-box { font-family: 'Courier New', Courier, monospace; background: #f8fafc; padding: 10px; border-radius: 8px; border-left: 4px solid #6366f1; }
+        .tab-btn { padding: 10px 20px; font-weight: 600; font-size: 0.875rem; transition: all 0.2s; border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: #6366f1; border-bottom-color: #6366f1; background-color: #f5f7ff; }
+        .history-card { border-left: 4px solid #10b981; margin-bottom: 12px; }
+    </style>
+</head>
+<body class="p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 flex items-center gap-3">
+            <span>📊</span> Smart Inventory POS
+        </h1>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="card"><p class="text-sm font-semibold text-gray-500 uppercase text-[10px]">Aset Gudang</p><p id="stat-asset" class="text-xl font-bold text-gray-800">Rp 0</p></div>
+            <div class="card"><p class="text-sm font-semibold text-gray-500 uppercase text-[10px]">Pendapatan</p><p id="stat-rev" class="text-xl font-bold text-green-600">Rp 0</p></div>
+            <div class="card"><p class="text-sm font-semibold text-gray-500 uppercase text-[10px]">Kritis</p><p id="stat-crit" class="text-xl font-bold text-red-500">0</p></div>
+            <div class="card"><p class="text-sm font-semibold text-gray-500 uppercase text-[10px]">Antrean</p><p id="stat-queue" class="text-xl font-bold text-indigo-600">0 Orang</p></div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div class="lg:col-span-8 space-y-4">
+                <div class="bg-white rounded-t-xl border-b border-gray-200 flex overflow-hidden">
+                    <button onclick="switchTab('warehouse')" id="btn-warehouse" class="tab-btn active">📦 Warehouse</button>
+                    <button onclick="switchTab('math')" id="btn-math" class="tab-btn">🧮 Math Analysis</button>
+                    <button onclick="switchTab('history')" id="btn-history" class="tab-btn">📜 History</button>
+                </div>
+
+                <div id="tab-warehouse" class="card rounded-t-none">
+                    <h2 class="text-xl font-bold mb-4 text-sm">Stock Monitoring</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50 text-gray-600 text-[10px] uppercase">
+                                    <th class="p-3">Produk</th>
+                                    <th class="p-3 text-center">Stok</th>
+				    <th class="p-3">Harga</th>
+                                    <th class="p-3 text-blue-600 font-bold text-center">ROP</th>
+                                    <th class="p-3 text-purple-600 font-bold text-center">EOQ</th>
+                                    <th class="p-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="tab-math" class="card rounded-t-none hidden">
+                    <h2 class="text-xl font-bold mb-4 text-sm">Live Formula Breakdown</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div class="formula-box">
+                            <p class="font-bold text-blue-600 mb-2 underline text-[10px]">REORDER POINT (ROP)</p>
+                            <div id="rop-math" class="leading-relaxed text-[11px]">Pilih barang di kasir...</div>
+                        </div>
+                        <div class="formula-box">
+                            <p class="font-bold text-purple-600 mb-2 underline text-[10px]">ECONOMIC ORDER QTY (EOQ)</p>
+                            <div id="eoq-math" class="leading-relaxed text-[11px]">Pilih barang di kasir...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="tab-history" class="card rounded-t-none hidden">
+                    <h2 class="text-xl font-bold mb-4 flex justify-between items-center text-sm">
+                        <span>Transaction Logs</span>
+                        <span id="trx-count" class="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">0 Trx</span>
+                    </h2>
+                    <div id="history-container" class="space-y-4 max-h-[500px] overflow-y-auto pr-2">
+                        <p class="text-center text-gray-400 py-20 italic text-xs">Belum ada transaksi.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 space-y-6">
+                <div class="card text-center">
+                    <h2 class="text-sm font-bold mb-4 uppercase text-gray-500 tracking-widest">🏃 Antrean</h2>
+                    <div class="queue-canvas" id="canvas"></div>
+                    <button onclick="addCustomer()" class="w-full mt-4 border-2 border-indigo-600 text-indigo-600 py-2 rounded-lg font-bold hover:bg-indigo-50 transition">+ Customer</button>
+                </div>
+
+                <div class="card border-2 border-indigo-50 shadow-sm">
+                    <h2 class="text-lg font-bold mb-4 italic text-indigo-800">💳 POS Kasir</h2>
+                    <div id="kasir-status" class="p-2 bg-blue-50 text-blue-700 rounded mb-4 text-center text-[10px] font-bold uppercase tracking-widest border border-blue-100 italic">Menunggu...</div>
+                    
+                    <div class="flex gap-2 mb-4 text-sm">
+                        <div class="flex-1">
+                            <label class="font-bold text-gray-500 uppercase text-[10px]">Barang</label>
+                            <select id="sell-select" onchange="updateUI()" class="w-full p-2 border rounded mt-1 bg-white font-bold text-xs"></select>
+                        </div>
+                        <div class="w-16">
+                            <label class="font-bold text-gray-500 uppercase text-[10px]">Qty</label>
+                            <input type="number" id="sell-qty" value="1" class="w-full p-2 border rounded mt-1 font-bold text-xs text-center">
+                        </div>
+                    </div>
+                    <button onclick="addToCart()" class="w-full bg-slate-800 text-white py-2 rounded-lg mb-4 font-bold text-[10px] hover:bg-black transition uppercase tracking-wider">+ Masukkan Nota</button>
+                    <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-[11px] mb-4">
+                         <div id="cart-list" class="space-y-1">Nota kosong...</div>
+		    <div id="total-nota" class="mt-2 pt-2 border-t border-amber-200 flex justify-between font-bold text-indigo-700 text-xs">
+        		 <span>TOTAL:</span>
+        		 <span id="total-amount">Rp 0</span>
+                    </div>
+                    <button onclick="doSale()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-md active:scale-95 transition uppercase text-xs">
+                        Bayar & Selesai
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const inventory = {
+            "Beras 5kg": {"stock": 20, "price": 65000, "sold": 0},
+            "Minyak 2L": {"stock": 15, "price": 35000, "sold": 0},
+            "Gula 1kg": {"stock": 45, "price": 18000, "sold": 0},
+            "Telur (Kg)": {"stock": 30, "price": 28000, "sold": 0},
+            "Mie (Dus)": {"stock": 8, "price": 110000, "sold": 0},
+            "Susu Kaleng": {"stock": 12, "price": 15000, "sold": 0},
+            "Kopi Bubuk": {"stock": 55, "price": 25000, "sold": 0},
+            "Teh Kotak": {"stock": 100, "price": 5000, "sold": 0},
+            "Sabun Cuci": {"stock": 18, "price": 12000, "sold": 0}
+        };
+
+        const SETUP_COST = 50000, HOLDING_RATE = 0.2, LEAD_TIME = 3;
+        let revenue = 0, queue = [], currentCart = [], customerCounter = 0, transactionCounter = 0;
+
+        function switchTab(tabName) {
+            document.getElementById('tab-warehouse').classList.add('hidden');
+            document.getElementById('tab-math').classList.add('hidden');
+            document.getElementById('tab-history').classList.add('hidden');
+            document.getElementById('btn-warehouse').classList.remove('active');
+            document.getElementById('btn-math').classList.remove('active');
+            document.getElementById('btn-history').classList.remove('active');
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+            document.getElementById('btn-' + tabName).classList.add('active');
+        }
+
+        function calculateLiveMetrics(name) {
+            const item = inventory[name];
+            let d = 2 + (item.sold * 0.5); 
+            let rop = Math.ceil((d * LEAD_TIME) + (d * 0.2));
+            let D_annual = d * 365, H = item.price * HOLDING_RATE;
+            let eoq = Math.round(Math.sqrt((2 * D_annual * SETUP_COST) / H));
+            return { d, rop, eoq, D_annual, H };
+        }
+
+        function updateUI() {
+            let asset = 0, critical = 0;
+            const tableBody = document.getElementById('inventory-table-body');
+            tableBody.innerHTML = '';
+
+            for (const [name, data] of Object.entries(inventory)) {
+                const m = calculateLiveMetrics(name);
+                asset += (data.stock * data.price);
+                if(data.stock <= m.rop) critical++;
+
+                tableBody.innerHTML += `
+                    <tr class="border-t text-[11px]">
+                        <td class="p-3 font-semibold">${name}</td>
+                        <td class="p-3 text-center font-bold text-slate-700">${data.stock}</td>
+			<td class="p-3 font bold">${data.price}</td>
+                        <td class="p-3 font-bold text-blue-600 text-center bg-blue-50/30">${m.rop}</td>
+                        <td class="p-3 font-bold text-purple-600 text-center bg-purple-50/30">${m.eoq}</td>
+                        <td class="p-3 font-bold">
+                            <span class="${data.stock <= m.rop ? 'status-reorder bg-red-50' : 'status-aman bg-green-50'} px-2 py-1 rounded uppercase tracking-tighter">
+                                ${data.stock <= m.rop ? '⚠️ Reorder' : '✅ Aman'}
+                            </span>
+                        </td>
+                    </tr>`;
+            }
+
+            const activeItem = document.getElementById('sell-select').value;
+            if(activeItem) {
+                const m = calculateLiveMetrics(activeItem);
+                document.getElementById('rop-math').innerHTML = `<b>Rumus: (d × L) + SS</b><br>(${m.d.toFixed(1)} × ${LEAD_TIME}) + ${(m.d * 0.2).toFixed(1)} = <b>${m.rop}</b>`;
+                document.getElementById('eoq-math').innerHTML = `<b>Rumus: √((2×D×S)/H)</b><br>D: ${Math.round(m.D_annual)}/th, H: Rp ${m.H.toLocaleString()}<br>√(${Math.round(2 * m.D_annual * SETUP_COST).toLocaleString()} / ${m.H}) = <b>${m.eoq}</b>`;
+            }
+
+            // UPDATE STATS
+            document.getElementById('stat-asset').innerText = `Rp ${asset.toLocaleString()}`;
+            document.getElementById('stat-rev').innerText = `Rp ${revenue.toLocaleString()}`;
+            document.getElementById('stat-crit').innerText = critical;
+            document.getElementById('stat-queue').innerText = `${queue.length} Orang`;
+
+            // UPDATE STATUS KASIR
+            const statusLabel = document.getElementById('kasir-status');
+            if(queue.length > 0) {
+                statusLabel.innerText = `Melayani 1 dari ${queue.length} orang`;
+                statusLabel.classList.replace('bg-blue-50', 'bg-indigo-600');
+                statusLabel.classList.replace('text-blue-700', 'text-white');
+            } else {
+                statusLabel.innerText = `Menunggu...`;
+                statusLabel.classList.replace('bg-indigo-600', 'bg-blue-50');
+                statusLabel.classList.replace('text-white', 'text-blue-700');
+            }
+
+            renderCart();
+        }
+
+        function addToCart() {
+            if(queue.length === 0) return alert("Belum ada antrean!");
+            const prod = document.getElementById('sell-select').value;
+            const qty = parseInt(document.getElementById('sell-qty').value);
+            if(qty <= 0) return;
+            const inCart = currentCart.filter(i => i.name === prod).reduce((sum, i) => sum + i.qty, 0);
+            if(inventory[prod].stock >= (qty + inCart)) {
+                currentCart.push({ name: prod, qty, price: inventory[prod].price });
+                updateUI();
+            } else { alert("Stok habis!"); }
+        }
+
+        function renderCart() {
+            const list = document.getElementById('cart-list');
+	    const totalDisplay = document.getElementById('total-amount');
+            if(currentCart.length === 0) { list.innerHTML = "Nota kosong..."; return; }
+	    let total = currentCart.reduce((sum, i) => sum + (i.qty * i.price), 0);
+            list.innerHTML = currentCart.map(i => `<div class="flex justify-between py-1 border-b border-amber-100 italic"><span>${i.qty}x ${i.name}</span> <span class="font-bold">Rp ${(i.qty * i.price).toLocaleString()}</span></div>`).join('');
+	    totalDisplay.innerText = `Rp ${total.toLocaleString()}`;
+        }
+
+        function doSale() {
+            if(queue.length === 0 || currentCart.length === 0) return alert("Antrean atau keranjang kosong!");
+            let totalBelanja = 0, itemsHtml = "";
+            currentCart.forEach(i => {
+                inventory[i.name].stock -= i.qty;
+                inventory[i.name].sold += i.qty;
+                let subtotal = i.qty * i.price;
+                totalBelanja += subtotal;
+                revenue += subtotal;
+                itemsHtml += `<li class="flex justify-between border-b border-gray-50 py-1 font-mono text-[10px]"><span>• ${i.qty} ${i.name}</span> <span>Rp ${subtotal.toLocaleString()}</span></li>`;
+            });
+            transactionCounter++;
+            const container = document.getElementById('history-container');
+            if(transactionCounter === 1) container.innerHTML = "";
+            const time = new Date().toLocaleTimeString('id-ID');
+            const newHistory = document.createElement('div');
+            newHistory.className = "card history-card p-4 bg-gray-50";
+            newHistory.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <div><h3 class="font-bold text-slate-800 text-xs">TRX #${transactionCounter}</h3><p class="text-[9px] text-gray-400 uppercase">${time} WIB</p></div>
+                    <span class="bg-green-600 text-white px-2 py-1 rounded text-[10px] font-bold">LUNAS</span>
+                </div>
+                <ul class="space-y-1 mb-2">${itemsHtml}</ul>
+                <div class="text-right font-bold text-indigo-600 text-xs border-t pt-1">Total: Rp ${totalBelanja.toLocaleString()}</div>
+            `;
+            container.prepend(newHistory);
+            document.getElementById('trx-count').innerText = `${transactionCounter} Trx`;
+            const id = queue.shift();
+            document.getElementById(id).remove();
+            currentCart = [];
+            moveQueue();
+            updateUI();
+        }
+
+        function addCustomer() {
+            customerCounter++;
+            const id = "p-" + customerCounter;
+            const person = document.createElement('div');
+            person.id = id; person.className = 'person'; person.innerText = '🚶';
+            document.getElementById('canvas').appendChild(person);
+            queue.push(id);
+            setTimeout(() => moveQueue(), 50);
+            updateUI();
+        }
+
+        function moveQueue() {
+            queue.forEach((id, idx) => {
+                const el = document.getElementById(id);
+                if(el) el.style.left = (20 + (idx * 40)) + "px";
+            });
+        }
+
+        document.getElementById('sell-select').innerHTML = Object.keys(inventory).sort().map(k => `<option value="${k}">${k}</option>`).join('');
+        updateUI();
+    </script>
+</body>
+</html>
