@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory System - Fixed Status</title>
+    <title>Smart Inventory POS - Fixed</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -50,7 +50,7 @@
                                 <tr class="bg-gray-50 text-gray-600 text-[10px] uppercase">
                                     <th class="p-3">Produk</th>
                                     <th class="p-3 text-center">Stok</th>
-				    <th class="p-3">Harga</th>
+                                    <th class="p-3">Harga</th>
                                     <th class="p-3 text-blue-600 font-bold text-center">ROP</th>
                                     <th class="p-3 text-purple-600 font-bold text-center">EOQ</th>
                                     <th class="p-3">Status</th>
@@ -61,16 +61,28 @@
                     </div>
                 </div>
 
+                <div class="mt-6 p-4 bg-white border rounded-xl flex items-center gap-4 shadow-sm">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Pilih Produk Restock</label>
+                        <select id="restock-select" class="p-2 border rounded bg-white w-full text-sm font-semibold"></select>
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Jumlah</label>
+                        <input type="number" id="restock-qty" value="10" class="p-2 border rounded w-full text-sm text-center">
+                    </div>
+                    <button onclick="doRestock()" class="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 mt-5 transition shadow-sm active:scale-95">RESTOCK</button>
+                </div>
+
                 <div id="tab-math" class="card rounded-t-none hidden">
                     <h2 class="text-xl font-bold mb-4 text-sm">Live Formula Breakdown</h2>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div class="formula-box">
                             <p class="font-bold text-blue-600 mb-2 underline text-[10px]">REORDER POINT (ROP)</p>
-                            <div id="rop-math" class="leading-relaxed text-[11px]">Pilih barang di kasir...</div>
+                            <div id="rop-math" class="leading-relaxed text-[11px]">Pilih barang...</div>
                         </div>
                         <div class="formula-box">
                             <p class="font-bold text-purple-600 mb-2 underline text-[10px]">ECONOMIC ORDER QTY (EOQ)</p>
-                            <div id="eoq-math" class="leading-relaxed text-[11px]">Pilih barang di kasir...</div>
+                            <div id="eoq-math" class="leading-relaxed text-[11px]">Pilih barang...</div>
                         </div>
                     </div>
                 </div>
@@ -108,11 +120,13 @@
                         </div>
                     </div>
                     <button onclick="addToCart()" class="w-full bg-slate-800 text-white py-2 rounded-lg mb-4 font-bold text-[10px] hover:bg-black transition uppercase tracking-wider">+ Masukkan Nota</button>
+                    
                     <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-[11px] mb-4">
-                         <div id="cart-list" class="space-y-1">Nota kosong...</div>
-		    <div id="total-nota" class="mt-2 pt-2 border-t border-amber-200 flex justify-between font-bold text-indigo-700 text-xs">
-        		 <span>TOTAL:</span>
-        		 <span id="total-amount">Rp 0</span>
+                        <div id="cart-list" class="space-y-1">Nota kosong...</div>
+                        <div id="total-nota" class="mt-2 pt-2 border-t border-amber-200 flex justify-between font-bold text-indigo-700 text-xs">
+                             <span>TOTAL:</span>
+                             <span id="total-amount">Rp 0</span>
+                        </div>
                     </div>
                     <button onclick="doSale()" class="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold hover:bg-indigo-700 shadow-md active:scale-95 transition uppercase text-xs">
                         Bayar & Selesai
@@ -161,8 +175,17 @@
         function updateUI() {
             let asset = 0, critical = 0;
             const tableBody = document.getElementById('inventory-table-body');
-            tableBody.innerHTML = '';
+            const restockSelect = document.getElementById('restock-select');
+            const sellSelect = document.getElementById('sell-select');
+            
+            // Inisialisasi Dropdown jika belum ada
+            if(!restockSelect.innerHTML) {
+                const options = Object.keys(inventory).sort().map(name => `<option value="${name}">${name}</option>`).join('');
+                restockSelect.innerHTML = options;
+                sellSelect.innerHTML = options;
+            }
 
+            tableBody.innerHTML = '';
             for (const [name, data] of Object.entries(inventory)) {
                 const m = calculateLiveMetrics(name);
                 asset += (data.stock * data.price);
@@ -172,7 +195,7 @@
                     <tr class="border-t text-[11px]">
                         <td class="p-3 font-semibold">${name}</td>
                         <td class="p-3 text-center font-bold text-slate-700">${data.stock}</td>
-			<td class="p-3 font bold">${data.price}</td>
+                        <td class="p-3">Rp ${data.price.toLocaleString()}</td>
                         <td class="p-3 font-bold text-blue-600 text-center bg-blue-50/30">${m.rop}</td>
                         <td class="p-3 font-bold text-purple-600 text-center bg-purple-50/30">${m.eoq}</td>
                         <td class="p-3 font-bold">
@@ -183,58 +206,81 @@
                     </tr>`;
             }
 
-            const activeItem = document.getElementById('sell-select').value;
+            // Update Math Analysis
+            const activeItem = sellSelect.value;
             if(activeItem) {
                 const m = calculateLiveMetrics(activeItem);
                 document.getElementById('rop-math').innerHTML = `<b>Rumus: (d × L) + SS</b><br>(${m.d.toFixed(1)} × ${LEAD_TIME}) + ${(m.d * 0.2).toFixed(1)} = <b>${m.rop}</b>`;
                 document.getElementById('eoq-math').innerHTML = `<b>Rumus: √((2×D×S)/H)</b><br>D: ${Math.round(m.D_annual)}/th, H: Rp ${m.H.toLocaleString()}<br>√(${Math.round(2 * m.D_annual * SETUP_COST).toLocaleString()} / ${m.H}) = <b>${m.eoq}</b>`;
             }
 
-            // UPDATE STATS
+            // Update Stats
             document.getElementById('stat-asset').innerText = `Rp ${asset.toLocaleString()}`;
             document.getElementById('stat-rev').innerText = `Rp ${revenue.toLocaleString()}`;
             document.getElementById('stat-crit').innerText = critical;
             document.getElementById('stat-queue').innerText = `${queue.length} Orang`;
 
-            // UPDATE STATUS KASIR
+            // Update POS Status
             const statusLabel = document.getElementById('kasir-status');
             if(queue.length > 0) {
                 statusLabel.innerText = `Melayani 1 dari ${queue.length} orang`;
-                statusLabel.classList.replace('bg-blue-50', 'bg-indigo-600');
-                statusLabel.classList.replace('text-blue-700', 'text-white');
+                statusLabel.className = "p-2 bg-indigo-600 text-white rounded mb-4 text-center text-[10px] font-bold uppercase tracking-widest border border-indigo-700 italic";
             } else {
                 statusLabel.innerText = `Menunggu...`;
-                statusLabel.classList.replace('bg-indigo-600', 'bg-blue-50');
-                statusLabel.classList.replace('text-white', 'text-blue-700');
+                statusLabel.className = "p-2 bg-blue-50 text-blue-700 rounded mb-4 text-center text-[10px] font-bold uppercase tracking-widest border border-blue-100 italic";
             }
 
             renderCart();
+        }
+
+        function doRestock() {
+            const prod = document.getElementById('restock-select').value;
+            const qtyInput = document.getElementById('restock-qty');
+            const qty = parseInt(qtyInput.value);
+
+            if(isNaN(qty) || qty <= 0) {
+                alert("Masukkan jumlah restock yang valid!");
+                return;
+            }
+
+            inventory[prod].stock += qty;
+            console.log(`Berhasil Restock ${prod} sebanyak ${qty}`);
+            updateUI();
+            
+            // Alert sederhana sukses
+            alert(`Stok ${prod} berhasil ditambah!`);
         }
 
         function addToCart() {
             if(queue.length === 0) return alert("Belum ada antrean!");
             const prod = document.getElementById('sell-select').value;
             const qty = parseInt(document.getElementById('sell-qty').value);
-            if(qty <= 0) return;
+            if(isNaN(qty) || qty <= 0) return;
+
             const inCart = currentCart.filter(i => i.name === prod).reduce((sum, i) => sum + i.qty, 0);
             if(inventory[prod].stock >= (qty + inCart)) {
                 currentCart.push({ name: prod, qty, price: inventory[prod].price });
                 updateUI();
-            } else { alert("Stok habis!"); }
+            } else { alert("Stok tidak mencukupi!"); }
         }
 
         function renderCart() {
             const list = document.getElementById('cart-list');
-	    const totalDisplay = document.getElementById('total-amount');
-            if(currentCart.length === 0) { list.innerHTML = "Nota kosong..."; return; }
-	    let total = currentCart.reduce((sum, i) => sum + (i.qty * i.price), 0);
+            const totalDisplay = document.getElementById('total-amount');
+            if(currentCart.length === 0) { 
+                list.innerHTML = "Nota kosong..."; 
+                totalDisplay.innerText = "Rp 0";
+                return; 
+            }
+            let total = currentCart.reduce((sum, i) => sum + (i.qty * i.price), 0);
             list.innerHTML = currentCart.map(i => `<div class="flex justify-between py-1 border-b border-amber-100 italic"><span>${i.qty}x ${i.name}</span> <span class="font-bold">Rp ${(i.qty * i.price).toLocaleString()}</span></div>`).join('');
-	    totalDisplay.innerText = `Rp ${total.toLocaleString()}`;
+            totalDisplay.innerText = `Rp ${total.toLocaleString()}`;
         }
 
         function doSale() {
             if(queue.length === 0 || currentCart.length === 0) return alert("Antrean atau keranjang kosong!");
             let totalBelanja = 0, itemsHtml = "";
+            
             currentCart.forEach(i => {
                 inventory[i.name].stock -= i.qty;
                 inventory[i.name].sold += i.qty;
@@ -243,9 +289,11 @@
                 revenue += subtotal;
                 itemsHtml += `<li class="flex justify-between border-b border-gray-50 py-1 font-mono text-[10px]"><span>• ${i.qty} ${i.name}</span> <span>Rp ${subtotal.toLocaleString()}</span></li>`;
             });
+
             transactionCounter++;
             const container = document.getElementById('history-container');
             if(transactionCounter === 1) container.innerHTML = "";
+            
             const time = new Date().toLocaleTimeString('id-ID');
             const newHistory = document.createElement('div');
             newHistory.className = "card history-card p-4 bg-gray-50";
@@ -259,8 +307,11 @@
             `;
             container.prepend(newHistory);
             document.getElementById('trx-count').innerText = `${transactionCounter} Trx`;
+            
             const id = queue.shift();
-            document.getElementById(id).remove();
+            const el = document.getElementById(id);
+            if(el) el.remove();
+            
             currentCart = [];
             moveQueue();
             updateUI();
@@ -284,7 +335,7 @@
             });
         }
 
-        document.getElementById('sell-select').innerHTML = Object.keys(inventory).sort().map(k => `<option value="${k}">${k}</option>`).join('');
+        // Jalankan UI pertama kali
         updateUI();
     </script>
 </body>
